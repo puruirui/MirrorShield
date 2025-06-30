@@ -14,16 +14,10 @@ class MirrorSelector:
     """Select optimal mirrors based on constraint satisfaction."""
 
     def __init__(self, config: Any):
-        """Initialize mirror selector.
-
-        Args:
-            config: Configuration object
-        """
         self.config = config
         self.constraint_validator = ConstraintValidator()
         self.text_processor = TextProcessor()
 
-        # Initialize OpenAI client if API key is available
         if hasattr(config, 'openai_api_key') and config.openai_api_key:
             openai.api_key = config.openai_api_key
             self.use_llm_classifier = True
@@ -37,19 +31,8 @@ class MirrorSelector:
                        input_prompt: str,
                        candidate_mirrors: List[str],
                        max_selected: int = 5) -> List[str]:
-        """Select best mirrors from candidates.
-
-        Args:
-            input_prompt: Original input prompt
-            candidate_mirrors: List of candidate mirrors
-            max_selected: Maximum number of mirrors to select
-
-        Returns:
-            List of selected mirrors
-        """
         logger.info(f"Selecting mirrors from {len(candidate_mirrors)} candidates")
 
-        # Extract reference constraints from input
         reference_constraints = self.constraint_validator.extract_constraints_from_text(input_prompt)
 
         # Evaluate each candidate
@@ -80,15 +63,6 @@ class MirrorSelector:
     def _evaluate_candidate(self,
                             candidate: str,
                             reference_constraints: Dict[str, Any]) -> Dict[str, Any]:
-        """Evaluate a single candidate mirror.
-
-        Args:
-            candidate: Candidate mirror text
-            reference_constraints: Reference constraints
-
-        Returns:
-            Evaluation results
-        """
         if self.use_llm_classifier:
             return self._llm_based_evaluation(candidate, reference_constraints)
         else:
@@ -97,15 +71,7 @@ class MirrorSelector:
     def _llm_based_evaluation(self,
                               candidate: str,
                               reference_constraints: Dict[str, Any]) -> Dict[str, Any]:
-        """Evaluate candidate using LLM-based classifier (GPT-4o).
 
-        Args:
-            candidate: Candidate mirror text
-            reference_constraints: Reference constraints
-
-        Returns:
-            Evaluation results
-        """
         # Construct evaluation prompt based on paper's template
         prompt = self._construct_evaluation_prompt(candidate, reference_constraints)
 
@@ -133,15 +99,7 @@ class MirrorSelector:
     def _rule_based_evaluation(self,
                                candidate: str,
                                reference_constraints: Dict[str, Any]) -> Dict[str, Any]:
-        """Evaluate candidate using rule-based approach.
 
-        Args:
-            candidate: Candidate mirror text
-            reference_constraints: Reference constraints
-
-        Returns:
-            Evaluation results
-        """
         return self.constraint_validator.validate_all_constraints(
             candidate,
             reference_constraints
@@ -150,16 +108,7 @@ class MirrorSelector:
     def _construct_evaluation_prompt(self,
                                      candidate: str,
                                      reference_constraints: Dict[str, Any]) -> str:
-        """Construct evaluation prompt for LLM classifier.
 
-        Args:
-            candidate: Candidate mirror text
-            reference_constraints: Reference constraints
-
-        Returns:
-            Formatted evaluation prompt
-        """
-        # Based on the template from Appendix C.3 in the paper
         prompt = """You will act as a classifier to evaluate a given candidate sentence against three specific criteria: Length Consistency, Syntax Consistency, and Sentiment Consistency. For each criterion, you must determine whether the sentence satisfies the requirement and respond with either "True" or "False".
 
 The evaluation must be based on the following criteria:
@@ -188,14 +137,6 @@ Output Format:
         )
 
     def _parse_llm_evaluation(self, evaluation_text: str) -> Dict[str, bool]:
-        """Parse LLM evaluation response.
-
-        Args:
-            evaluation_text: Raw LLM response
-
-        Returns:
-            Parsed evaluation results
-        """
         evaluation = {
             "length": False,
             "syntax": False,
@@ -216,14 +157,6 @@ Output Format:
         return evaluation
 
     def _calculate_score(self, evaluation: Dict[str, bool]) -> float:
-        """Calculate overall score for candidate.
-
-        Args:
-            evaluation: Evaluation results
-
-        Returns:
-            Overall score (0-1)
-        """
         # Weight constraints according to paper's findings
         weights = {
             "length": 0.5,  # Most important according to ablation study
@@ -239,12 +172,4 @@ Output Format:
         return score
 
     def _passes_all_constraints(self, evaluation: Dict[str, bool]) -> bool:
-        """Check if candidate passes all constraints.
-
-        Args:
-            evaluation: Evaluation results
-
-        Returns:
-            True if all constraints are satisfied
-        """
         return all(evaluation.values())
