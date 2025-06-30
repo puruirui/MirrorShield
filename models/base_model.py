@@ -7,15 +7,9 @@ logger = logging.getLogger(__name__)
 
 
 class BaseModel:
-    """Base model wrapper for handling LLM operations."""
 
     def __init__(self, model_name: str, device: Optional[str] = None):
-        """Initialize base model.
 
-        Args:
-            model_name: Name or path of the model
-            device: Device to run the model on
-        """
         self.model_name = model_name
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -37,18 +31,7 @@ class BaseModel:
                  top_p: float = 0.9,
                  num_return_sequences: int = 1,
                  **kwargs) -> List[str]:
-        """Generate text from input.
 
-        Args:
-            input_text: Input text prompt
-            max_length: Maximum generation length
-            temperature: Sampling temperature
-            top_p: Nucleus sampling parameter
-            num_return_sequences: Number of sequences to generate
-
-        Returns:
-            List of generated texts
-        """
         inputs = self.tokenizer(
             input_text,
             return_tensors="pt",
@@ -79,14 +62,7 @@ class BaseModel:
         return generated_texts
 
     def get_attention_weights(self, input_text: str) -> Dict[str, torch.Tensor]:
-        """Get attention weights for input text.
 
-        Args:
-            input_text: Input text
-
-        Returns:
-            Dictionary containing attention weights
-        """
         inputs = self.tokenizer(
             input_text,
             return_tensors="pt",
