@@ -50,7 +50,6 @@ def main():
         }
         qa_records.append(record)
 
-    # 确保 eval_output 目录存在
     output_dir = "eval_output"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
