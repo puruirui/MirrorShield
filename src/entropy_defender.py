@@ -11,36 +11,20 @@ logger = logging.getLogger(__name__)
 
 
 class EntropyDefender:
-    """Entropy-based defender using mirror comparison."""
 
     def __init__(self, config: Any, target_model: BaseModel):
-        """Initialize entropy defender.
 
-        Args:
-            config: Configuration object
-            target_model: Target LLM to defend
-        """
         self.config = config
         self.target_model = target_model
         self.attention_analyzer = AttentionAnalyzer()
-        self.text_processor = TextProcessor()
+        self.text_processor = TextProcessor(target_model=target_model)
 
         logger.info("EntropyDefender initialized")
 
     def defend_input(self,
                      input_prompt: str,
                      mirrors: List[str]) -> Tuple[str, Dict[str, Any]]:
-        """Defend against input using mirror comparison.
 
-        Args:
-            input_prompt: Input prompt to defend
-            mirrors: List of mirror prompts for comparison
-
-        Returns:
-            Tuple of (decision, defense_info)
-            decision: "accept", "reject", or "refined_prompt"
-            defense_info: Dictionary with defense details
-        """
         logger.info("Starting entropy-based defense")
 
         if len(mirrors) < 2:
@@ -84,16 +68,8 @@ class EntropyDefender:
                        input_prompt: str,
                        mirror1: str,
                        mirror2: str) -> float:
-        """Calculate Relative Input Uncertainty (RIU).
 
-        Args:
-            input_prompt: Original input prompt
-            mirror1: First mirror
-            mirror2: Second mirror
 
-        Returns:
-            RIU value
-        """
         # Get attention weights for all inputs
         input_attention = self.target_model.get_attention_weights(input_prompt)
         mirror1_attention = self.target_model.get_attention_weights(mirror1)
@@ -119,15 +95,6 @@ class EntropyDefender:
         return riu
 
     def _extract_primary_attention(self, attention_output: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """Extract primary attention weights from model output.
-
-        Args:
-            attention_output: Attention output from model
-
-        Returns:
-            Primary attention tensor
-        """
-        # Use encoder attention if available, otherwise decoder attention
         if attention_output.get("encoder_attentions") is not None:
             attentions = attention_output["encoder_attentions"]
         elif attention_output.get("decoder_attentions") is not None:
@@ -142,16 +109,6 @@ class EntropyDefender:
                                        input_prompt: str,
                                        mirror1: str,
                                        mirror2: str) -> Tuple[str, int]:
-        """Apply multiple-query guidance for iterative refinement.
-
-        Args:
-            input_prompt: Original input prompt
-            mirror1: First mirror for comparison
-            mirror2: Second mirror for comparison
-
-        Returns:
-            Tuple of (refined_prompt, num_iterations)
-        """
         current_prompt = input_prompt
         iterations = 0
 
@@ -163,7 +120,7 @@ class EntropyDefender:
             # Generate multiple queries for refinement
             queries = self.text_processor.generate_multiple_queries(current_prompt)
 
-            # Apply simplification
+            # Apply simplification using target model
             simplified_prompt = self.text_processor.simplify_text(current_prompt)
 
             # Recalculate RIU with simplified prompt
@@ -183,7 +140,7 @@ class EntropyDefender:
     def analyze_input_risk(self,
                            input_prompt: str,
                            mirrors: List[str]) -> Dict[str, Any]:
-        """Analyze risk level of input prompt.
+        """Analyze risk level of input prompt based on RIU.
 
         Args:
             input_prompt: Input prompt to analyze
@@ -195,7 +152,6 @@ class EntropyDefender:
         analysis = {
             "risk_level": "unknown",
             "confidence": 0.0,
-            "indicators": [],
             "recommendations": []
         }
 
@@ -212,29 +168,13 @@ class EntropyDefender:
                 analysis["risk_level"] = "high"
                 analysis["confidence"] = 1.0 - (riu / self.config.riu_threshold)
 
-        # Check for harmful indicators
-        harmful_indicators = self.text_processor.extract_harmful_indicators(input_prompt)
-        if harmful_indicators:
-            analysis["indicators"].extend(harmful_indicators)
-            analysis["risk_level"] = "high"
-
-        # Check for role-playing patterns
-        role_patterns = self.text_processor.extract_role_playing_patterns(input_prompt)
-        if role_patterns:
-            analysis["indicators"].append(f"role_playing: {role_patterns}")
-
-        # Check for encoding patterns
-        encoding_patterns = self.text_processor.detect_encoding_patterns(input_prompt)
-        if any(encoding_patterns.values()):
-            analysis["indicators"].append(f"encoding_detected: {encoding_patterns}")
-
-        # Generate recommendations
-        if analysis["risk_level"] == "high":
-            analysis["recommendations"] = [
-                "Apply multiple-query guidance",
-                "Simplify the input prompt",
-                "Request clarification from user",
-                "Consider rejecting the input"
-            ]
+            # Generate recommendations based on RIU
+            if analysis["risk_level"] == "high":
+                analysis["recommendations"] = [
+                    "Apply multiple-query guidance",
+                    "Simplify the input prompt",
+                    "Request clarification from user",
+                    "Consider rejecting the input"
+                ]
 
         return analysis
