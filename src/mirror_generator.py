@@ -1,162 +1,124 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, Trainer, TrainingArguments
-from datasets import Dataset
-import json
-from typing import List, Dict, Optional
-from ..utils.constraint_utils import ConstraintProcessor, Constraint
-from ..config.config import MirrorGeneratorConfig
+from typing import List, Dict, Any, Optional, Tuple
+import logging
 
+from ..models.instruction_tuned_model import InstructionTunedModel
+from ..utils.constraint_utils import ConstraintValidator
+from ..utils.text_processing import TextProcessor
+
+logger = logging.getLogger(__name__)
 
 class MirrorGenerator:
-    """镜像生成器"""
-
-    def __init__(self, config: MirrorGeneratorConfig):
+    """Generate mirrors with syntactic similarity and semantic safety."""
+    
+    def __init__(self, config: Any):
+        """Initialize mirror generator.
+        
+        Args:
+            config: Configuration object
+        """
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(config.base_model_name)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(config.base_model_name)
-        self.constraint_processor = ConstraintProcessor()
-
-        # 添加特殊token
-        special_tokens = ["<LENGTH>", "<SYNTAX>", "<SENTIMENT>", "</LENGTH>", "</SYNTAX>", "</SENTIMENT>"]
-        self.tokenizer.add_special_tokens({"additional_special_tokens": special_tokens})
-        self.model.resize_token_embeddings(len(self.tokenizer))
-
-    def create_instruction_prompt(self, constraints: List[Constraint]) -> str:
-        """创建指令提示"""
-        instruction_parts = []
-
-        for constraint in constraints:
-            if constraint.constraint_type == "length":
-                min_len, max_len = constraint.value
-                instruction_parts.append(f"Write something that has {min_len} to {max_len} words")
-            elif constraint.constraint_type == "syntax":
-                pos_sequence = " ".join(constraint.value)
-                instruction_parts.append(f"Write something with part-of-speech sequence {pos_sequence}")
-            elif constraint.constraint_type == "sentiment":
-                instruction_parts.append(f"Write something with {constraint.value} sentiment")
-
-        if len(instruction_parts) > 1:
-            instruction = " and ".join(instruction_parts) + "."
-        else:
-            instruction = instruction_parts[0] + "."
-
-        return instruction
-
-    def generate_mirrors(self, input_prompt: str, num_mirrors: Optional[int] = None) -> List[str]:
-        """生成镜像"""
-        if num_mirrors is None:
-            num_mirrors = self.config.num_candidate_mirrors
-
-        # 提取约束
-        constraints = [
-            self.constraint_processor.extract_length_constraint(input_prompt),
-            self.constraint_processor.extract_syntax_constraint(input_prompt),
-            self.constraint_processor.extract_sentiment_constraint(positive_sentiment=True)
-        ]
-
-        # 创建指令
-        instruction = self.create_instruction_prompt(constraints)
-
-        # 生成镜像
-        mirrors = []
-        for _ in range(num_mirrors):
-            mirror = self._generate_single_mirror(instruction)
-            if mirror and mirror not in mirrors:
-                mirrors.append(mirror)
-
-        return mirrors
-
-    def _generate_single_mirror(self, instruction: str) -> str:
-        """生成单个镜像"""
-        inputs = self.tokenizer(
-            instruction,
-            return_tensors="pt",
-            max_length=self.config.max_length,
-            truncation=True,
-            padding=True
+        self.constraint_validator = ConstraintValidator()
+        self.text_processor = TextProcessor()
+        
+        # Initialize instruction-tuned model
+        self.instruction_model = InstructionTunedModel(
+            config.base_model_name,
+            device=config.device if hasattr(config, 'device') else None
         )
-
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_length=self.config.max_length,
-                temperature=self.config.temperature,
-                top_p=self.config.top_p,
-                do_sample=True,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
-
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        # 移除指令部分，只保留生成的内容
-        if instruction in generated_text:
-            generated_text = generated_text.replace(instruction, "").strip()
-
-        return generated_text
-
-    def train(self, training_data: List[Dict], output_dir: str):
-        """训练镜像生成器"""
-        # 准备训练数据
-        train_dataset = self._prepare_training_dataset(training_data)
-
-        # 训练参数
-        training_args = TrainingArguments(
-            output_dir=output_dir,
-            num_train_epochs=self.config.num_epochs,
-            per_device_train_batch_size=self.config.batch_size,
-            learning_rate=self.config.learning_rate,
-            logging_steps=100,
-            save_steps=1000,
-            evaluation_strategy="steps",
-            eval_steps=500,
-            warmup_steps=100,
-            load_best_model_at_end=True,
+        
+        logger.info("MirrorGenerator initialized")
+    
+    def generate_mirrors(self, 
+                        input_prompt: str, 
+                        num_candidates: int = None) -> List[str]:
+        """Generate mirror candidates for input prompt.
+        
+        Args:
+            input_prompt: Original input prompt
+            num_candidates: Number of candidate mirrors to generate
+            
+        Returns:
+            List of generated mirror candidates
+        """
+        if num_candidates is None:
+            num_candidates = self.config.num_candidate_mirrors
+        
+        logger.info(f"Generating {num_candidates} mirror candidates for input prompt")
+        
+        # Extract constraints from input prompt
+        constraints = self._extract_input_constraints(input_prompt)
+        
+        # Generate candidate mirrors using instruction-tuned model
+        candidates = self.instruction_model.generate_with_constraints(
+            input_prompt,
+            constraints,
+            num_candidates=num_candidates
         )
-
-        # 训练器
-        trainer = Trainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=train_dataset,
-            tokenizer=self.tokenizer,
+        
+        # Clean and post-process candidates
+        processed_candidates = []
+        for candidate in candidates:
+            processed = self.text_processor.clean_text(candidate)
+            if processed and processed != input_prompt:  # Avoid duplicates
+                processed_candidates.append(processed)
+        
+        logger.info(f"Generated {len(processed_candidates)} valid mirror candidates")
+        
+        return processed_candidates
+    
+    def _extract_input_constraints(self, input_prompt: str) -> Dict[str, Any]:
+        """Extract constraints from input prompt.
+        
+        Args:
+            input_prompt: Input prompt to analyze
+            
+        Returns:
+            Dictionary of extracted constraints
+        """
+        constraints = self.constraint_validator.extract_constraints_from_text(input_prompt)
+        
+        # Ensure sentiment is non-negative for mirrors (as per paper)
+        if constraints.get("sentiment") == "negative":
+            constraints["sentiment"] = "neutral"
+        
+        # Adjust length constraint with tolerance
+        if "length" in constraints:
+            length = constraints["length"]
+            min_len = max(1, int(length * (1 - self.config.length_tolerance)))
+            max_len = int(length * (1 + self.config.length_tolerance))
+            constraints["length"] = (min_len, max_len)
+        
+        logger.debug(f"Extracted constraints: {constraints}")
+        
+        return constraints
+    
+    def fine_tune_model(self, training_data: List[Dict[str, str]]) -> None:
+        """Fine-tune the instruction model on constraint data.
+        
+        Args:
+            training_data: Training data for fine-tuning
+        """
+        logger.info("Fine-tuning instruction model...")
+        
+        self.instruction_model.fine_tune(
+            training_data,
+            self.config,
+            output_dir=self.config.instruction_tuned_model_path
         )
-
-        # 开始训练
-        trainer.train()
-
-        # 保存模型
-        trainer.save_model()
-        self.tokenizer.save_pretrained(output_dir)
-
-    def _prepare_training_dataset(self, training_data: List[Dict]) -> Dataset:
-        """准备训练数据集"""
-        processed_data = []
-
-        for example in training_data:
-            input_text = example["instruction"]
-            target_text = example["output"]
-
-            # 对输入和输出进行tokenize
-            input_encoding = self.tokenizer(
-                input_text,
-                max_length=self.config.max_length,
-                padding="max_length",
-                truncation=True,
-                return_tensors="pt"
-            )
-
-            target_encoding = self.tokenizer(
-                target_text,
-                max_length=self.config.max_length,
-                padding="max_length",
-                truncation=True,
-                return_tensors="pt"
-            )
-
-            processed_data.append({
-                "input_ids": input_encoding["input_ids"].squeeze(),
-                "attention_mask": input_encoding["attention_mask"].squeeze(),
-                "labels": target_encoding["input_ids"].squeeze()
-            })
-
-        return Dataset.from_list(processed_data)
+        
+        logger.info("Model fine-tuning completed")
+    
+    def load_fine_tuned_model(self, model_path: str) -> None:
+        """Load a pre-fine-tuned model.
+        
+        Args:
+            model_path: Path to the fine-tuned model
+        """
+        logger.info(f"Loading fine-tuned model from {model_path}")
+        
+        # Reinitialize with fine-tuned model
+        self.instruction_model = InstructionTunedModel(model_path)
+        self.instruction_model.is_fine_tuned = True
+        
+        logger.info("Fine-tuned model loaded successfully")
