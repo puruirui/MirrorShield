@@ -6,7 +6,6 @@ from ..utils.constraint_utils import ConstraintProcessor
 
 
 class ConstraintDataGenerator:
-    """Constraint data generator for creating training data"""
 
     def __init__(self, openai_api_key: Optional[str] = None):
         self.nlp = spacy.load("en_core_web_sm")
@@ -18,10 +17,7 @@ class ConstraintDataGenerator:
         self.openai_client = openai
 
     def extract_pos_pattern_from_input(self, input_text: str) -> str:
-        """
-        Extract POS pattern from input text dynamically
-        Returns the part-of-speech sequence of the input
-        """
+        
         doc = self.nlp(input_text)
         pos_tags = []
 
@@ -52,14 +48,11 @@ class ConstraintDataGenerator:
         return " ".join(pos_tags)
 
     def extract_syntactic_structure_from_input(self, input_text: str) -> str:
-        """
-        Extract linearized syntactic parse tree structure from input text
-        Returns a linearized representation like (S (NP (DT *) (NN *)) (VP (VBD *)))
-        """
+
         doc = self.nlp(input_text)
 
         def token_to_pos_tag(token):
-            """Convert spaCy POS to Penn Treebank style tags"""
+
             pos_mapping = {
                 "DET": "DT",
                 "NOUN": "NN",
@@ -183,10 +176,7 @@ class ConstraintDataGenerator:
             return ""
 
     def get_sentiment_label_with_gpt4o(self, input_text: str) -> str:
-        """
-        Use GPT-4o to assign sentiment labels to input text
-        Returns sentiment label following the paper's methodology
-        """
+
         prompt = f"""You are a sentiment analysis assistant. Given an input sentence, please determine its overall sentiment as one of the following labels: positive, neutral, or negative.
 Return your answer in the exact format below:
 TARGET: <input sentence>
@@ -232,10 +222,7 @@ Input sentence:
             return "neutral"  # Default to neutral for safety
 
     def generate_length_constraints_from_input(self, input_text: str, lambda_param: int = 2) -> List[str]:
-        """
-        Generate length constraints based on input text length
-        Uses configurable parameter λ as mentioned in the paper
-        """
+
         doc = self.nlp(input_text)
         token_count = len([token for token in doc if not token.is_space])
 
@@ -262,10 +249,7 @@ Input sentence:
         return constraints
 
     def generate_syntax_constraints_from_input(self, input_text: str) -> List[str]:
-        """
-        Generate syntax constraints based on input text structure
-        Extracts both POS patterns and linearized parse tree structures
-        """
+
         constraints = []
 
         # Generate POS sequence constraints
@@ -291,10 +275,7 @@ Input sentence:
 
     def generate_sentiment_constraints_from_input(self, input_text: str, use_gpt4o: bool = True) -> Tuple[
         List[str], str]:
-        """
-        Generate sentiment constraints based on input text
-        Always generates positive/neutral constraints for safety as mentioned in the paper
-        """
+
         if use_gpt4o:
             original_sentiment = self.get_sentiment_label_with_gpt4o(input_text)
         else:
@@ -314,10 +295,7 @@ Input sentence:
         return constraints, target_sentiment
 
     def generate_combined_constraints_from_input(self, input_text: str, use_gpt4o: bool = True) -> List[str]:
-        """
-        Generate combined constraints based on input text characteristics
-        Uses conjunctive "and" as mentioned in the paper
-        """
+
         # Extract all constraint types from input
         length_constraints = self.generate_length_constraints_from_input(input_text)
         syntax_constraints = self.generate_syntax_constraints_from_input(input_text)
@@ -387,10 +365,7 @@ Input sentence:
 
     def create_training_dataset_from_inputs(self, input_texts: List[str], use_gpt4o: bool = True) -> List[
         Dict[str, str]]:
-        """
-        Create training dataset from a list of input texts
-        Each input generates multiple constraint-text pairs following the paper's methodology
-        """
+
         training_data = []
 
         for input_text in input_texts:
@@ -421,10 +396,7 @@ Input sentence:
 
     def sample_text_from_dataset(self, dataset_texts: List[str], target_length: int, target_sentiment: str,
                                  target_pos_pattern: str = None) -> str:
-        """
-        Sample appropriate text from dataset that matches the constraints
-        This replaces predefined examples with actual dataset sampling
-        """
+
         if not dataset_texts:
             raise ValueError("Dataset texts cannot be empty")
 
@@ -470,10 +442,7 @@ Input sentence:
 
     def _generate_output_for_constraint(self, constraint: str, original_input: str, target_sentiment: str,
                                         dataset_texts: List[str] = None) -> str:
-        """
-        Generate output that satisfies the given constraint by sampling from dataset
-        Based on the paper's methodology of sampling from C4 dataset with sentiment labeling
-        """
+
         if not dataset_texts:
             raise ValueError("Dataset texts must be provided for sampling")
 
@@ -509,10 +478,7 @@ Input sentence:
         )
 
     def extract_constraints_from_prompt(self, prompt: str) -> Dict[str, any]:
-        """
-        Extract constraint information from input prompt for Mirror Generator
-        Returns comprehensive constraint analysis
-        """
+
         doc = self.nlp(prompt)
 
         # Extract length information
