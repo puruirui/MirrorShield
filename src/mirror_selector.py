@@ -159,9 +159,9 @@ Output Format:
     def _calculate_score(self, evaluation: Dict[str, bool]) -> float:
         # Weight constraints according to paper's findings
         weights = {
-            "length": 0.5,  # Most important according to ablation study
-            "syntax": 0.3,  # Important for structural similarity
-            "sentiment": 0.2  # Least impact according to paper
+            "length": 0.5,  
+            "syntax": 0.3, 
+            "sentiment": 0.2 
         }
 
         score = 0.0
