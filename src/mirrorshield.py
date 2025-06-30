@@ -12,24 +12,15 @@ logger = logging.getLogger(__name__)
 
 
 class MirrorShield:
-    """Main MirrorShield defense system."""
 
     def __init__(self, config: Any, target_model: Optional[BaseModel] = None):
-        """Initialize MirrorShield system.
-
-        Args:
-            config: Configuration object
-            target_model: Target LLM to defend (optional)
-        """
         self.config = config
 
-        # Initialize target model if not provided
         if target_model is None:
             self.target_model = BaseModel(config.target_model_name)
         else:
             self.target_model = target_model
 
-        # Initialize core components
         self.mirror_generator = MirrorGenerator(config)
         self.mirror_selector = MirrorSelector(config)
         self.entropy_defender = EntropyDefender(config, self.target_model)
@@ -40,14 +31,6 @@ class MirrorShield:
         logger.info("MirrorShield system initialized")
 
     def defend_and_generate(self, input_prompt: str) -> Dict[str, Any]:
-        """Main defense and generation pipeline.
-
-        Args:
-            input_prompt: Input prompt to process
-
-        Returns:
-            Dictionary containing defense results and generated response
-        """
         start_time = time.time()
 
         logger.info(f"Processing input prompt: {input_prompt[:100]}...")
@@ -125,16 +108,6 @@ class MirrorShield:
                            decision: str,
                            defense_info: Dict[str, Any],
                            original_prompt: str) -> Dict[str, Any]:
-        """Generate response based on defense decision.
-
-        Args:
-            decision: Defense decision
-            defense_info: Defense information
-            original_prompt: Original input prompt
-
-        Returns:
-            Response information
-        """
         if decision == "accept":
             # Generate normal response
             response = self.target_model.generate(
@@ -174,14 +147,7 @@ class MirrorShield:
             }
 
     def analyze_prompt_risk(self, input_prompt: str) -> Dict[str, Any]:
-        """Analyze risk level of input prompt without full processing.
-
-        Args:
-            input_prompt: Input prompt to analyze
-
-        Returns:
-            Risk analysis results
-        """
+        
         logger.info("Analyzing prompt risk")
 
         # Generate minimal mirrors for analysis
@@ -210,31 +176,19 @@ class MirrorShield:
         return analysis
 
     def get_performance_metrics(self) -> Dict[str, Any]:
-        """Get performance metrics for the defense system.
 
-        Returns:
-            Performance metrics dictionary
-        """
         return self.evaluation_metrics.get_performance_summary()
 
     def export_metrics(self, filepath: str):
-        """Export performance metrics to file.
 
-        Args:
-            filepath: Path to save metrics
-        """
         self.evaluation_metrics.export_results(filepath)
 
     def reset_metrics(self):
-        """Reset performance metrics."""
+
         self.evaluation_metrics.reset_metrics()
 
     def fine_tune_mirror_generator(self, training_data: List[Dict[str, str]]):
-        """Fine-tune the mirror generator with custom training data.
 
-        Args:
-            training_data: Training data for fine-tuning
-        """
         logger.info("Fine-tuning mirror generator")
         self.mirror_generator.fine_tune_model(training_data)
         logger.info("Mirror generator fine-tuning completed")
