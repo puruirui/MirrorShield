@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class InstructionTunedModel(BaseModel):
-    """Instruction-tuned model for generating mirrors with constraints."""
 
     def __init__(self, model_name: str, device: Optional[str] = None):
         """Initialize instruction-tuned model."""
@@ -22,13 +21,7 @@ class InstructionTunedModel(BaseModel):
                   training_data: List[Dict[str, str]],
                   config: Any,
                   output_dir: str = "./models/instruction_tuned") -> None:
-        """Fine-tune model on constraint-text pairs.
 
-        Args:
-            training_data: List of constraint-text pairs
-            config: Training configuration
-            output_dir: Output directory for fine-tuned model
-        """
         logger.info(f"Fine-tuning model with {len(training_data)} examples")
 
         # Prepare dataset
@@ -98,16 +91,7 @@ class InstructionTunedModel(BaseModel):
                                   input_text: str,
                                   constraints: Dict[str, Any],
                                   num_candidates: int = 5) -> List[str]:
-        """Generate text with specified constraints.
 
-        Args:
-            input_text: Original input text
-            constraints: Dictionary of constraints (length, syntax, sentiment)
-            num_candidates: Number of candidate mirrors to generate
-
-        Returns:
-            List of generated mirror candidates
-        """
         # Construct instruction prompt
         instruction = self._build_instruction_prompt(input_text, constraints)
 
@@ -123,15 +107,7 @@ class InstructionTunedModel(BaseModel):
         return candidates
 
     def _build_instruction_prompt(self, input_text: str, constraints: Dict[str, Any]) -> str:
-        """Build instruction prompt for constraint-based generation.
 
-        Args:
-            input_text: Original input text
-            constraints: Constraint dictionary
-
-        Returns:
-            Formatted instruction prompt
-        """
         constraint_parts = []
 
         # Length constraint
