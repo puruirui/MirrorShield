@@ -1,0 +1,12 @@
+torch>=1.12.0
+transformers>=4.20.0
+datasets>=2.0.0
+spacy>=3.4.0
+textblob>=0.17.1
+nltk>=3.7
+numpy>=1.21.0
+openai>=0.27.0
+tqdm>=4.64.0
+scikit-learn>=1.1.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
