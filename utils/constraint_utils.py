@@ -9,10 +9,8 @@ logger = logging.getLogger(__name__)
 
 
 class ConstraintValidator:
-    """Validator for checking mirror constraints."""
 
     def __init__(self):
-        """Initialize constraint validator."""
         try:
             self.nlp = spacy.load("en_core_web_sm")
         except OSError:
@@ -29,16 +27,6 @@ class ConstraintValidator:
                                    text: str,
                                    target_length: int,
                                    tolerance: float = 0.2) -> bool:
-        """Validate length constraint.
-
-        Args:
-            text: Text to validate
-            target_length: Target length in tokens
-            tolerance: Tolerance ratio (e.g., 0.2 for ±20%)
-
-        Returns:
-            True if length constraint is satisfied
-        """
         tokens = self._tokenize(text)
         actual_length = len(tokens)
 
@@ -50,15 +38,6 @@ class ConstraintValidator:
     def validate_syntax_constraint(self,
                                    text: str,
                                    target_pos_sequence: List[str]) -> bool:
-        """Validate syntax constraint using POS tagging.
-
-        Args:
-            text: Text to validate
-            target_pos_sequence: Target POS sequence
-
-        Returns:
-            True if syntax constraint is satisfied
-        """
         if self.nlp is None:
             logger.warning("spaCy not available, skipping syntax validation")
             return True
@@ -66,23 +45,13 @@ class ConstraintValidator:
         doc = self.nlp(text)
         actual_pos = [token.pos_ for token in doc]
 
-        # Simple matching - can be enhanced with fuzzy matching
         return actual_pos == target_pos_sequence
 
     def validate_sentiment_constraint(self,
                                       text: str,
                                       target_sentiment: str = "positive",
                                       threshold: float = 0.1) -> bool:
-        """Validate sentiment constraint.
 
-        Args:
-            text: Text to validate
-            target_sentiment: Target sentiment (positive, negative, neutral)
-            threshold: Threshold for sentiment classification
-
-        Returns:
-            True if sentiment constraint is satisfied
-        """
         blob = TextBlob(text)
         polarity = blob.sentiment.polarity
 
@@ -97,14 +66,7 @@ class ConstraintValidator:
             return polarity >= -threshold
 
     def extract_constraints_from_text(self, text: str) -> Dict[str, Any]:
-        """Extract constraints from input text.
 
-        Args:
-            text: Input text
-
-        Returns:
-            Dictionary containing extracted constraints
-        """
         constraints = {}
 
         # Length constraint
@@ -131,15 +93,7 @@ class ConstraintValidator:
     def validate_all_constraints(self,
                                  candidate_text: str,
                                  reference_constraints: Dict[str, Any]) -> Dict[str, bool]:
-        """Validate all constraints for a candidate text.
 
-        Args:
-            candidate_text: Candidate mirror text
-            reference_constraints: Reference constraints
-
-        Returns:
-            Dictionary with validation results for each constraint
-        """
         results = {}
 
         # Length validation
@@ -166,30 +120,14 @@ class ConstraintValidator:
         return results
 
     def _tokenize(self, text: str) -> List[str]:
-        """Tokenize text into tokens.
 
-        Args:
-            text: Input text
-
-        Returns:
-            List of tokens
-        """
         # Simple whitespace tokenization - can be enhanced
         return text.strip().split()
 
     def generate_constraint_ranges(self,
                                    reference_length: int,
                                    lambda_param: float = 1.0) -> Tuple[int, int]:
-        """Generate length constraint ranges as described in paper.
 
-        Args:
-            reference_length: Reference text length
-            lambda_param: Lambda parameter for range calculation
-
-        Returns:
-            Tuple of (min_length, max_length)
-        """
-        # As described in paper: λn to λ(n+1) words
         n = int(reference_length / lambda_param)
         min_length = int(lambda_param * n)
         max_length = int(lambda_param * (n + 1))
