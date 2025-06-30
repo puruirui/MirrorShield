@@ -1,4 +1,3 @@
-"""Text processing utilities for MirrorShield."""
 import re
 from typing import List
 import logging
@@ -7,27 +6,14 @@ logger = logging.getLogger(__name__)
 
 
 class TextProcessor:
-    """Text processing utilities for MirrorShield."""
 
     def __init__(self, target_model=None):
-        """Initialize text processor.
-
-        Args:
-            target_model: Target model for simplification operations
-        """
         self.target_model = target_model
 
 
 
     def simplify_text(self, text: str) -> str:
-        """Simplify text using target model.
 
-        Args:
-            text: Input text to simplify
-
-        Returns:
-            Simplified text
-        """
         if not self.target_model:
             logger.warning("No target model available for simplification")
             return text
@@ -42,14 +28,7 @@ class TextProcessor:
             return text
 
     def generate_multiple_queries(self, original_prompt: str) -> List[str]:
-        """Generate multiple queries for iterative refinement.
 
-        Args:
-            original_prompt: Original input prompt
-
-        Returns:
-            List of refined queries
-        """
         queries = [
             f"Does this involve sensitive topics? Why? Input: {original_prompt}",
             f"Is there any redundant information? Why? Input: {original_prompt}",
