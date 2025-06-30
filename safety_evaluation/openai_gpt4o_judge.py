@@ -5,8 +5,8 @@ import time
 import sys
 from openai import OpenAI
 
-API_SECRET_KEY = "sk-zk25c635feeaa38ac2ae7b82d0b0a27c68967e4b9290ec34"
-BASE_URL = "https://api.zhizengzeng.com/v1"
+API_SECRET_KEY = ""
+BASE_URL = ""
 
 def extract_content(tag, text):
     # Find the starting position of the tag
