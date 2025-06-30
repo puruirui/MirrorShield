@@ -1,11 +1,8 @@
 import openai
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any
 import logging
-import json
-import time
 
 from ..utils.constraint_utils import ConstraintValidator
-from ..utils.text_processing import TextProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +13,11 @@ class MirrorSelector:
     def __init__(self, config: Any):
         self.config = config
         self.constraint_validator = ConstraintValidator()
-        self.text_processor = TextProcessor()
 
         if hasattr(config, 'openai_api_key') and config.openai_api_key:
             openai.api_key = config.openai_api_key
-            self.use_llm_classifier = True
         else:
-            logger.warning("OpenAI API key not provided. Using rule-based classification.")
-            self.use_llm_classifier = False
+            raise ValueError("OpenAI API key required for GPT-4o mirror evaluation")
 
         logger.info("MirrorSelector initialized")
 
@@ -34,45 +28,25 @@ class MirrorSelector:
         logger.info(f"Selecting mirrors from {len(candidate_mirrors)} candidates")
 
         reference_constraints = self.constraint_validator.extract_constraints_from_text(input_prompt)
-
-        # Evaluate each candidate
-        evaluated_candidates = []
+        selected_mirrors = []
 
         for candidate in candidate_mirrors:
-            evaluation = self._evaluate_candidate(candidate, reference_constraints)
-            evaluated_candidates.append({
-                "text": candidate,
-                "evaluation": evaluation,
-                "score": self._calculate_score(evaluation)
-            })
+            if len(selected_mirrors) >= max_selected:
+                break
 
-        # Sort by score and select top candidates
-        evaluated_candidates.sort(key=lambda x: x["score"], reverse=True)
+            evaluation = self._evaluate_candidate_with_gpt4o(candidate, reference_constraints)
 
-        # Select candidates that pass all constraints
-        selected_mirrors = []
-        for candidate_info in evaluated_candidates:
-            if (self._passes_all_constraints(candidate_info["evaluation"]) and
-                    len(selected_mirrors) < max_selected):
-                selected_mirrors.append(candidate_info["text"])
+            if self._passes_all_constraints(evaluation):
+                selected_mirrors.append(candidate)
 
         logger.info(f"Selected {len(selected_mirrors)} mirrors")
-
         return selected_mirrors
 
-    def _evaluate_candidate(self,
-                            candidate: str,
-                            reference_constraints: Dict[str, Any]) -> Dict[str, Any]:
-        if self.use_llm_classifier:
-            return self._llm_based_evaluation(candidate, reference_constraints)
-        else:
-            return self._rule_based_evaluation(candidate, reference_constraints)
+    def _evaluate_candidate_with_gpt4o(self,
+                                       candidate: str,
+                                       reference_constraints: Dict[str, Any]) -> Dict[str, bool]:
+        """Evaluate candidate using GPT-4o classifier."""
 
-    def _llm_based_evaluation(self,
-                              candidate: str,
-                              reference_constraints: Dict[str, Any]) -> Dict[str, Any]:
-
-        # Construct evaluation prompt based on paper's template
         prompt = self._construct_evaluation_prompt(candidate, reference_constraints)
 
         try:
@@ -82,28 +56,16 @@ class MirrorSelector:
                     {"role": "system", "content": "You are a constraint evaluation assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
+                temperature=0,
                 max_tokens=200
             )
 
-            # Parse LLM response
             evaluation_text = response.choices[0].message.content
-            evaluation = self._parse_llm_evaluation(evaluation_text)
+            return self._parse_llm_evaluation(evaluation_text)
 
         except Exception as e:
-            logger.warning(f"LLM evaluation failed: {e}. Falling back to rule-based evaluation.")
-            evaluation = self._rule_based_evaluation(candidate, reference_constraints)
-
-        return evaluation
-
-    def _rule_based_evaluation(self,
-                               candidate: str,
-                               reference_constraints: Dict[str, Any]) -> Dict[str, Any]:
-
-        return self.constraint_validator.validate_all_constraints(
-            candidate,
-            reference_constraints
-        )
+            logger.error(f"GPT-4o evaluation failed: {e}")
+            return {"length": False, "syntax": False, "sentiment": False}
 
     def _construct_evaluation_prompt(self,
                                      candidate: str,
@@ -137,13 +99,14 @@ Output Format:
         )
 
     def _parse_llm_evaluation(self, evaluation_text: str) -> Dict[str, bool]:
+        """Parse GPT-4o evaluation response."""
+
         evaluation = {
             "length": False,
             "syntax": False,
             "sentiment": False
         }
 
-        # Simple parsing - can be enhanced with more robust parsing
         lines = evaluation_text.lower().split('\n')
 
         for line in lines:
@@ -156,20 +119,6 @@ Output Format:
 
         return evaluation
 
-    def _calculate_score(self, evaluation: Dict[str, bool]) -> float:
-        # Weight constraints according to paper's findings
-        weights = {
-            "length": 0.5,  
-            "syntax": 0.3, 
-            "sentiment": 0.2 
-        }
-
-        score = 0.0
-        for constraint, passed in evaluation.items():
-            if constraint in weights and passed:
-                score += weights[constraint]
-
-        return score
-
     def _passes_all_constraints(self, evaluation: Dict[str, bool]) -> bool:
+        """Check if candidate passes all three constraints."""
         return all(evaluation.values())
